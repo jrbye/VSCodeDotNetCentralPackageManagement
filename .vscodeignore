@@ -4,6 +4,10 @@ src/**
 .gitignore
 .yarnrc
 tsconfig.json
-node_modules/**
 *.map
 *.ts
+test/**
+.eslintrc*
+.prettierrc*
+convert-icon.js
+logo-concepts/**

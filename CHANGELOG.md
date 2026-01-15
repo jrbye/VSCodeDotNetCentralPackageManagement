@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2025-01-15
+
+### Fixed
+- **Critical**: Fixed missing dependencies in packaged extension (axios, fast-xml-parser)
+- Updated .vscodeignore to include node_modules in the published extension
+- Extension now loads properly without "Cannot find module" errors
+
+### Technical Changes
+- Removed `node_modules/**` from .vscodeignore to include runtime dependencies
+- Added test files and other development-only files to .vscodeignore
+
 ## [0.1.1] - 2025-01-15
 
 ### Fixed

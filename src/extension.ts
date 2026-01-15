@@ -10,7 +10,8 @@ import { removePackageCommand } from './commands/removePackage';
 import { PackageManagerPanel } from './webview/packageManagerPanel';
 import { AddPackagePanel } from './commands/addPackagePanel';
 
-export async function activate(context: vscode.ExtensionContext) {
+export function activate(context: vscode.ExtensionContext) {
+    console.log('=== .NET CPM v0.1.1 Activation Started ===');
     console.log('.NET Central Package Management extension is now active');
 
     // Initialize services
@@ -192,6 +193,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Update diagnostics will happen after initialization completes
+    console.log('=== .NET CPM v0.1.1 Activation Complete ===');
 }
 
 export function deactivate() {
