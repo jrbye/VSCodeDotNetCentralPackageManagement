@@ -18,15 +18,6 @@ export async function activate(context: vscode.ExtensionContext) {
     const nugetService = new NuGetService();
     const cpmManager = new CpmManager(xmlService, nugetService);
 
-    // Initialize CPM Manager
-    const initialized = await cpmManager.initialize();
-
-    if (!initialized) {
-        console.log('No Directory.Packages.props found in workspace');
-    }
-
-    // Note: Tree view removed - using Activity Bar with direct panel access instead
-
     // Register completion provider for Directory.Packages.props
     const completionProvider = new CompletionProvider(nugetService, cpmManager);
     const completionDisposable = vscode.languages.registerCompletionItemProvider(
@@ -37,6 +28,24 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register diagnostics provider
     const diagnosticsProvider = new DiagnosticsProvider(cpmManager, xmlService);
+
+    // Initialize CPM Manager in background (don't block activation)
+    cpmManager.initialize().then(initialized => {
+        if (initialized) {
+            console.log('CPM Manager initialized successfully');
+            // Update diagnostics after successful initialization
+            diagnosticsProvider.updateDiagnostics().catch(err => {
+                console.error('Error updating diagnostics:', err);
+            });
+        } else {
+            console.log('No Directory.Packages.props found in workspace');
+        }
+    }).catch(error => {
+        console.error('Error initializing CPM Manager:', error);
+        vscode.window.showErrorMessage(`Failed to initialize .NET CPM: ${error.message}`);
+    });
+
+    // Note: Tree view removed - using Activity Bar with direct panel access instead
 
     // Register Activity Bar view to auto-open Package Manager
     const treeView = vscode.window.createTreeView('dotnetCpmWelcome', {
@@ -182,10 +191,7 @@ export async function activate(context: vscode.ExtensionContext) {
         diagnosticsProvider
     );
 
-    // Update diagnostics on activation
-    if (initialized) {
-        await diagnosticsProvider.updateDiagnostics();
-    }
+    // Update diagnostics will happen after initialization completes
 }
 
 export function deactivate() {

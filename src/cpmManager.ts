@@ -31,16 +31,25 @@ export class CpmManager {
     }
 
     async initialize(): Promise<boolean> {
-        await this.findPropsFile();
+        try {
+            console.log('Initializing CPM Manager...');
+            await this.findPropsFile();
 
-        if (this.propsFileUri) {
-            await this.loadPackages();
-            await this.scanProjects();
-            this.setupFileWatcher();
-            return true;
+            if (this.propsFileUri) {
+                console.log(`Found Directory.Packages.props at: ${this.propsFileUri.fsPath}`);
+                await this.loadPackages();
+                await this.scanProjects();
+                this.setupFileWatcher();
+                console.log('CPM Manager initialization complete');
+                return true;
+            }
+
+            console.log('No Directory.Packages.props found');
+            return false;
+        } catch (error) {
+            console.error('Error during CPM Manager initialization:', error);
+            throw error;
         }
-
-        return false;
     }
 
     private async findPropsFile(): Promise<void> {
@@ -56,30 +65,51 @@ export class CpmManager {
             return;
         }
 
-        const propsData = await this.xmlService.readPropsFile(this.propsFileUri);
+        try {
+            const propsData = await this.xmlService.readPropsFile(this.propsFileUri);
 
-        if (propsData) {
-            this.itemGroups = propsData.itemGroups;
+            if (propsData) {
+                this.itemGroups = propsData.itemGroups;
+                console.log(`Loaded ${this.itemGroups.length} package groups with ${this.getAllPackages().length} total packages`);
+            } else {
+                console.log('No package data found in Directory.Packages.props');
+            }
+        } catch (error) {
+            console.error('Error loading packages:', error);
+            throw error;
         }
     }
 
     private async scanProjects(): Promise<void> {
-        const csprojFiles = await vscode.workspace.findFiles('**/*.csproj', '**/node_modules/**');
+        try {
+            const csprojFiles = await vscode.workspace.findFiles('**/*.csproj', '**/node_modules/**');
+            console.log(`Found ${csprojFiles.length} .csproj files`);
 
-        this.projects = [];
+            this.projects = [];
 
-        for (const csprojUri of csprojFiles) {
-            const packages = await this.xmlService.readCsprojFile(csprojUri);
-            const versionedPackages = await this.xmlService.getPackageReferencesWithVersions(csprojUri);
+            for (const csprojUri of csprojFiles) {
+                try {
+                    const packages = await this.xmlService.readCsprojFile(csprojUri);
+                    const versionedPackages = await this.xmlService.getPackageReferencesWithVersions(csprojUri);
 
-            if (packages) {
-                this.projects.push({
-                    path: csprojUri.fsPath,
-                    name: path.basename(csprojUri.fsPath, '.csproj'),
-                    packages: packages,
-                    versionedPackages: versionedPackages || new Map()
-                });
+                    if (packages) {
+                        this.projects.push({
+                            path: csprojUri.fsPath,
+                            name: path.basename(csprojUri.fsPath, '.csproj'),
+                            packages: packages,
+                            versionedPackages: versionedPackages || new Map()
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Error reading project file ${csprojUri.fsPath}:`, error);
+                    // Continue with other projects
+                }
             }
+
+            console.log(`Successfully loaded ${this.projects.length} projects`);
+        } catch (error) {
+            console.error('Error scanning projects:', error);
+            throw error;
         }
     }
 

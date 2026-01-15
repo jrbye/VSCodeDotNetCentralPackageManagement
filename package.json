@@ -2,7 +2,7 @@
   "name": "vscode-dotnet-cpm",
   "displayName": ".NET Central Package Management",
   "description": "Manage NuGet packages with Central Package Management (CPM) support",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "JRBye",
   "icon": "icon.png",
   "license": "MIT",

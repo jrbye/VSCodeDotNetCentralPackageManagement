@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - Initial Release
+## [0.1.1] - 2025-01-15
+
+### Fixed
+- **Critical**: Fixed extension activation hanging issue that prevented the extension from loading
+- Made initialization non-blocking to allow extension to activate immediately
+- Added comprehensive error handling and logging to initialization process
+- Added error handling for project scanning to prevent failures from blocking activation
+- Improved console logging to help diagnose initialization issues
+
+### Technical Changes
+- Changed `cpmManager.initialize()` from blocking await to promise-based background initialization
+- Wrapped project scanning in try-catch blocks to handle individual project failures gracefully
+- Added detailed console logging throughout initialization process
+- Diagnostics now update after successful initialization completes
+
+## [0.1.0] - 2025-01-15 - Initial Release
 
 ### Added
 - Central Package Management support for .NET projects
