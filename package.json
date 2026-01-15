@@ -1,0 +1,124 @@
+{
+  "name": "vscode-dotnet-cpm",
+  "displayName": ".NET Central Package Management",
+  "description": "Manage NuGet packages with Central Package Management (CPM) support",
+  "version": "0.1.0",
+  "publisher": "JRBye",
+  "icon": "icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jrbye/VSCodeDotNetCentralPackageManagement.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jrbye/VSCodeDotNetCentralPackageManagement/issues"
+  },
+  "homepage": "https://github.com/jrbye/VSCodeDotNetCentralPackageManagement#readme",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "dotnet",
+    "csharp",
+    "nuget",
+    "package management",
+    "central package management"
+  ],
+  "activationEvents": [
+    "onLanguage:xml",
+    "workspaceContains:**/Directory.Packages.props",
+    "onView:dotnetCpmWelcome"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dotnetCpm",
+          "title": ".NET Central Package Management",
+          "icon": "$(package)"
+        }
+      ]
+    },
+    "views": {
+      "dotnetCpm": [
+        {
+          "id": "dotnetCpmWelcome",
+          "name": "Packages"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "dotnetCpm.addPackage",
+        "title": ".NET CPM: Add Package",
+        "icon": "$(add)"
+      },
+      {
+        "command": "dotnetCpm.updateVersion",
+        "title": ".NET CPM: Upgrade Version"
+      },
+      {
+        "command": "dotnetCpm.removePackage",
+        "title": ".NET CPM: Remove Package"
+      },
+      {
+        "command": "dotnetCpm.searchPackages",
+        "title": ".NET CPM: Search NuGet Packages"
+      },
+      {
+        "command": "dotnetCpm.checkForUpdates",
+        "title": ".NET CPM: Check for Package Upgrades"
+      },
+      {
+        "command": "dotnetCpm.refresh",
+        "title": ".NET CPM: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dotnetCpm.openPackageManager",
+        "title": ".NET CPM: Open Package Manager",
+        "icon": "$(package)"
+      }
+    ],
+    "configuration": {
+      "title": ".NET Central Package Management",
+      "properties": {
+        "dotnetCpm.showPrereleaseVersions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show prerelease versions (alpha, beta, rc) in package searches and version lists"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTests.js",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.x",
+    "@typescript-eslint/parser": "^6.x",
+    "@vscode/test-electron": "^2.3.8",
+    "eslint": "^8.x",
+    "glob": "^10.5.0",
+    "mocha": "^10.8.2",
+    "sharp": "^0.34.5",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "fast-xml-parser": "^4.3.0"
+  }
+}
