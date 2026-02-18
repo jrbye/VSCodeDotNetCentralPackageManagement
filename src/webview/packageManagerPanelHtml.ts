@@ -23,6 +23,7 @@ export function getHtmlForWebview(): string {
         .container {
             display: flex;
             height: 100vh;
+            position: relative;
         }
 
         /* Package List Sidebar */
@@ -551,10 +552,197 @@ export function getHtmlForWebview(): string {
         .remove-btn {
             margin-top: 16px;
         }
+
+        /* Analysis badges */
+        .vulnerability-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        .vulnerability-badge.critical, .vulnerability-badge.high {
+            background-color: var(--vscode-errorForeground);
+            color: var(--vscode-editor-background);
+        }
+        .vulnerability-badge.moderate {
+            background-color: var(--vscode-editorWarning-foreground);
+            color: var(--vscode-editor-background);
+        }
+        .vulnerability-badge.low {
+            background-color: var(--vscode-descriptionForeground);
+            color: var(--vscode-editor-background);
+        }
+        .conflict-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            background-color: var(--vscode-editorWarning-foreground);
+            color: var(--vscode-editor-background);
+            font-weight: 600;
+        }
+        .version-conflict-warning {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            background-color: var(--vscode-editorWarning-foreground);
+            color: var(--vscode-editor-background);
+            font-weight: 600;
+            cursor: help;
+        }
+        .version-compatible {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            background-color: var(--vscode-gitDecoration-addedResourceForeground, #4ec94e);
+            color: var(--vscode-editor-background);
+            font-weight: 600;
+        }
+        .version-vulnerable {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            background-color: var(--vscode-editorError-foreground, #f44747);
+            color: var(--vscode-editor-background);
+            font-weight: 600;
+            cursor: help;
+        }
+        .constraint-banner {
+            margin-top: 8px;
+            font-size: 11px;
+            color: var(--vscode-editorWarning-foreground);
+            padding: 8px 12px;
+            background: rgba(255,165,0,0.08);
+            border-radius: 4px;
+            border-left: 3px solid var(--vscode-editorWarning-foreground);
+        }
+        /* Analysis overlay */
+        .analysis-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.4);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .analysis-overlay.visible {
+            display: flex;
+        }
+        .analysis-overlay-content {
+            background-color: var(--vscode-editor-background);
+            padding: 24px 32px;
+            border-radius: 4px;
+            text-align: center;
+            border: 1px solid var(--vscode-panel-border);
+        }
+        .analysis-overlay-content .upgrade-spinner {
+            margin: 0 auto 12px;
+        }
+        .analysis-overlay-message {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .analysis-overlay-detail {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+        }
+
+        /* Analysis status bar */
+        .analysis-status {
+            padding: 8px 16px;
+            border-top: 1px solid var(--vscode-panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: var(--vscode-descriptionForeground);
+            flex-shrink: 0;
+        }
+        .analysis-status-text {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .analysis-issue-count {
+            color: var(--vscode-editorWarning-foreground);
+            font-weight: 600;
+        }
+        .btn-analysis {
+            padding: 3px 10px;
+            font-size: 11px;
+            background-color: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .btn-analysis:hover {
+            background-color: var(--vscode-button-secondaryHoverBackground);
+        }
+
+        /* Analysis info sections */
+        .vuln-item {
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            border-radius: 4px;
+            border-left: 3px solid;
+        }
+        .vuln-item.critical, .vuln-item.high {
+            background-color: rgba(255, 0, 0, 0.08);
+            border-left-color: var(--vscode-errorForeground);
+        }
+        .vuln-item.moderate {
+            background-color: rgba(255, 165, 0, 0.08);
+            border-left-color: var(--vscode-editorWarning-foreground);
+        }
+        .vuln-item.low {
+            background-color: rgba(128, 128, 128, 0.08);
+            border-left-color: var(--vscode-descriptionForeground);
+        }
+        .vuln-severity {
+            font-weight: 600;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .vuln-advisory {
+            font-size: 11px;
+        }
+        .vuln-advisory a {
+            color: var(--vscode-textLink-foreground);
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .vuln-advisory a:hover {
+            text-decoration: underline;
+        }
+        .conflict-item {
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            background-color: rgba(255, 165, 0, 0.08);
+            border-radius: 4px;
+            border-left: 3px solid var(--vscode-editorWarning-foreground);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .conflict-versions {
+            font-family: 'Consolas', 'Courier New', monospace;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="analysis-overlay" id="analysisOverlay">
+            <div class="analysis-overlay-content">
+                <div class="upgrade-spinner"></div>
+                <div class="analysis-overlay-message">Analyzing Dependencies</div>
+                <div class="analysis-overlay-detail">Checking for transitive conflicts and vulnerabilities...</div>
+            </div>
+        </div>
+
         <!-- Package List Sidebar -->
         <div class="sidebar">
             <div class="header">
@@ -569,6 +757,10 @@ export function getHtmlForWebview(): string {
             </div>
             <div class="package-list" id="packageList">
                 <div class="loading">Loading packages...</div>
+            </div>
+            <div class="analysis-status" id="analysisStatus">
+                <span class="analysis-status-text">Analysis: not run</span>
+                <button class="btn-analysis" onclick="runAnalysis()">Analyze</button>
             </div>
         </div>
 
@@ -596,6 +788,8 @@ export function getHtmlForWebview(): string {
         let allProjects = [];
         let selectedPackage = null;
         let currentPackageInfo = null;
+        let analysisResult = null;
+        let currentAnalysisData = null;
 
         window.addEventListener('message', event => {
             const message = event.data;
@@ -615,12 +809,20 @@ export function getHtmlForWebview(): string {
                     // Only re-render the package list if the packages actually changed (not just project usage)
                     const packagesChanged = !oldPackagesData || oldPackagesData.length !== packagesData.length ||
                         oldPackagesData.some((oldPkg, idx) =>
-                            !packagesData[idx] || oldPkg.name !== packagesData[idx].name || oldPkg.version !== packagesData[idx].version
+                            !packagesData[idx] || oldPkg.name !== packagesData[idx].name || oldPkg.version !== packagesData[idx].version ||
+                            oldPkg.hasConflicts !== packagesData[idx].hasConflicts ||
+                            oldPkg.hasVulnerabilities !== packagesData[idx].hasVulnerabilities ||
+                            oldPkg.hasUpdate !== packagesData[idx].hasUpdate ||
+                            oldPkg.maxVulnerabilitySeverity !== packagesData[idx].maxVulnerabilitySeverity
                         );
+
+                    analysisResult = message.analysisResult || null;
 
                     if (packagesChanged) {
                         renderPackageList();
                     }
+
+                    updateAnalysisStatus();
 
                     // Refresh package info if a package is currently selected
                     if (selectedPackage && currentPackageInfo) {
@@ -647,6 +849,31 @@ export function getHtmlForWebview(): string {
                 case 'projectOperationComplete':
                     hideProjectOperationInProgress();
                     break;
+                case 'packageAnalysis':
+                    currentAnalysisData = {
+                        conflicts: message.conflicts || [],
+                        vulnerabilities: message.vulnerabilities || []
+                    };
+                    if (selectedPackage && currentPackageInfo) {
+                        renderPackageInfo(selectedPackage, currentPackageInfo);
+                    }
+                    break;
+                case 'analysisStatusChanged': {
+                    const overlay = document.getElementById('analysisOverlay');
+                    if (overlay) {
+                        if (message.isRunning) {
+                            overlay.classList.add('visible');
+                        } else {
+                            overlay.classList.remove('visible');
+                        }
+                    }
+                    // Update the status bar to reflect running state
+                    if (analysisResult) {
+                        analysisResult.isRunning = message.isRunning;
+                    }
+                    updateAnalysisStatus();
+                    break;
+                }
                 case 'packageRemoved':
                     // Clear the info and versions panes
                     selectedPackage = null;
@@ -708,6 +935,8 @@ export function getHtmlForWebview(): string {
                                             <div class="package-version">
                                                 v\${pkg.version}
                                                 \${hasUpdate ? '<span class="upgrade-badge">UPGRADE</span>' : ''}
+                                                \${pkgData && pkgData.hasVulnerabilities ? \`<span class="vulnerability-badge \${(pkgData.maxVulnerabilitySeverity || '').toLowerCase()}">\${pkgData.maxVulnerabilitySeverity || 'VULN'}</span>\` : ''}
+                                                \${pkgData && pkgData.hasConflicts ? '<span class="conflict-badge">CONFLICT</span>' : ''}
                                             </div>
                                         </div>
                                     </div>
@@ -728,6 +957,7 @@ export function getHtmlForWebview(): string {
 
         function selectPackage(packageName) {
             selectedPackage = packageName;
+            currentAnalysisData = null;
             renderPackageList();
 
             const infoPane = document.getElementById('infoPane');
@@ -743,6 +973,11 @@ export function getHtmlForWebview(): string {
 
             vscode.postMessage({
                 type: 'getVersions',
+                packageName: packageName
+            });
+
+            vscode.postMessage({
+                type: 'getPackageAnalysis',
                 packageName: packageName
             });
         }
@@ -786,6 +1021,37 @@ export function getHtmlForWebview(): string {
                             </div>
                         </div>
                     </div>
+
+                    \${currentAnalysisData && currentAnalysisData.vulnerabilities.length > 0 ? \`
+                        <div class="info-section">
+                            <div class="info-section-title">Security Vulnerabilities (\${currentAnalysisData.vulnerabilities.length})</div>
+                            \${currentAnalysisData.vulnerabilities.map(v =>
+                                v.vulnerabilities.map(vv => \`
+                                    <div class="vuln-item \${vv.severity.toLowerCase()}">
+                                        <div class="vuln-severity">\${vv.severity}</div>
+                                        <div class="vuln-advisory">
+                                            \${v.resolvedVersion}\${v.isTransitive ? ' (transitive)' : ''}
+                                            \${vv.advisoryUrl ? \` — <a href="#" onclick="openExternal('\${vv.advisoryUrl}'); return false;">View Advisory</a>\` : ''}
+                                        </div>
+                                    </div>
+                                \`).join('')
+                            ).join('')}
+                        </div>
+                    \` : ''}
+
+                    \${currentAnalysisData && currentAnalysisData.conflicts.length > 0 ? \`
+                        <div class="info-section">
+                            <div class="info-section-title">Transitive Conflicts (\${currentAnalysisData.conflicts.length})</div>
+                            \${currentAnalysisData.conflicts.map(c => \`
+                                <div class="conflict-item">
+                                    Central version <span class="conflict-versions">\${c.centralVersion}</span>
+                                    but <strong>\${c.transitiveParents.length > 0 ? c.transitiveParents.join(', ') : 'other packages'}</strong>
+                                    requires <span class="conflict-versions">\${c.transitiveVersion}</span>
+                                    <br>Projects: \${c.projects.join(', ')}
+                                </div>
+                            \`).join('')}
+                        </div>
+                    \` : ''}
 
                     \${allProjects && allProjects.length > 0 ? \`
                         <div class="info-section">
@@ -835,11 +1101,23 @@ export function getHtmlForWebview(): string {
             return 0;
         }
 
+        function versionSatisfiesConstraint(version, tc) {
+            if (!tc) return true;
+            if (tc.isExact) {
+                return version === tc.requiredVersion;
+            }
+            // Minimum version: version must be >= requiredVersion
+            return compareVersions(version, tc.requiredVersion) >= 0;
+        }
+
         function renderVersions(data) {
             const versionsPane = document.getElementById('versionsPane');
             const currentVersion = data.currentVersion;
             const stableVersions = data.versions.filter(v => !v.includes('-'));
             const latestStable = stableVersions[0];
+            const tc = data.transitiveConstraint;
+            const constraintLabel = tc ? (tc.isExact ? \`= \${tc.requiredVersion}\` : \`>= \${tc.requiredVersion}\`) : '';
+            const vulns = data.versionVulnerabilities || {};
 
             versionsPane.innerHTML = \`
                 <div class="versions-header">
@@ -848,12 +1126,30 @@ export function getHtmlForWebview(): string {
                         <div class="version-badge">\${currentVersion}</div>
                         \${data.isOutdated ? '<span class="upgrade-badge">Upgrade Available</span>' : '<span class="version-label">Up to date</span>'}
                     </div>
+                    \${tc ? \`
+                        <div class="constraint-banner">
+                            Transitive dependency constraint: <strong>\${tc.requiredBy.join(', ')}</strong>
+                            requires version <strong>\${constraintLabel}</strong>
+                        </div>
+                    \` : ''}
                 </div>
                 <div class="versions-content">
                     <div class="versions-list">
                         \${data.versions.slice(0, 20).map(version => {
                             const isDowngrade = compareVersions(version, currentVersion) < 0;
                             const buttonText = isDowngrade ? 'Downgrade' : 'Upgrade';
+                            let constraintHtml = '';
+                            if (tc) {
+                                if (versionSatisfiesConstraint(version, tc)) {
+                                    constraintHtml = '<span class="version-compatible" title="Satisfies transitive requirement">Compatible</span>';
+                                } else {
+                                    constraintHtml = \`<span class="version-conflict-warning" title="\${tc.requiredBy.join(', ')} requires \${constraintLabel}">Conflict Risk</span>\`;
+                                }
+                            }
+                            const vulnInfo = vulns[version];
+                            const vulnHtml = vulnInfo
+                                ? \`<span class="version-vulnerable" title="\${vulnInfo.count} known \${vulnInfo.count === 1 ? 'vulnerability' : 'vulnerabilities'}">\${vulnInfo.severity}</span>\`
+                                : '';
                             return \`
                             <div class="version-item \${version === data.latestVersion ? 'latest' : ''}">
                                 <div class="version-info">
@@ -861,6 +1157,8 @@ export function getHtmlForWebview(): string {
                                     \${version === currentVersion ? '<span class="version-label">Current</span>' : ''}
                                     \${version === data.latestVersion ? '<span class="version-label">Latest</span>' : ''}
                                     \${version === latestStable && version !== data.latestVersion ? '<span class="version-label">Latest Stable</span>' : ''}
+                                    \${constraintHtml}
+                                    \${vulnHtml}
                                 </div>
                                 <div>
                                     \${version !== currentVersion ?
@@ -996,6 +1294,55 @@ export function getHtmlForWebview(): string {
 
         function filterPackages() {
             renderPackageList();
+        }
+
+        function updateAnalysisStatus() {
+            const el = document.getElementById('analysisStatus');
+            if (!el) return;
+
+            if (!analysisResult) {
+                el.innerHTML = \`
+                    <span class="analysis-status-text">Analysis: not run</span>
+                    <button class="btn-analysis" onclick="runAnalysis()">Analyze</button>
+                \`;
+                return;
+            }
+
+            if (analysisResult.isRunning) {
+                el.innerHTML = \`
+                    <span class="analysis-status-text">Analyzing...</span>
+                \`;
+                return;
+            }
+
+            if (analysisResult.error) {
+                el.innerHTML = \`
+                    <span class="analysis-status-text" title="\${analysisResult.error}">Analysis: error</span>
+                    <button class="btn-analysis" onclick="runAnalysis()">Retry</button>
+                \`;
+                return;
+            }
+
+            const totalIssues = (analysisResult.transitiveConflicts?.length || 0) + (analysisResult.vulnerablePackages?.length || 0);
+            if (totalIssues > 0) {
+                el.innerHTML = \`
+                    <span class="analysis-status-text"><span class="analysis-issue-count">\${totalIssues} issue\${totalIssues !== 1 ? 's' : ''}</span> found</span>
+                    <button class="btn-analysis" onclick="runAnalysis()">Re-analyze</button>
+                \`;
+            } else {
+                el.innerHTML = \`
+                    <span class="analysis-status-text">No issues found</span>
+                    <button class="btn-analysis" onclick="runAnalysis()">Re-analyze</button>
+                \`;
+            }
+        }
+
+        function runAnalysis() {
+            vscode.postMessage({ type: 'runAnalysis' });
+        }
+
+        function openExternal(url) {
+            vscode.postMessage({ type: 'openExternal', url: url });
         }
     </script>
 </body>

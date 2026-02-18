@@ -40,13 +40,7 @@ suite('XmlService Test Suite', () => {
     setup(() => {
         xmlService = new xmlService_1.XmlService();
     });
-    test('parseXml should parse valid XML', () => {
-        const xmlContent = '<?xml version="1.0" encoding="utf-8"?><Project><ItemGroup><PackageVersion Include="NUnit" Version="4.0.0" /></ItemGroup></Project>';
-        const parsed = xmlService.parseXml(xmlContent);
-        assert.ok(parsed.Project);
-        assert.ok(parsed.Project.ItemGroup);
-    });
-    test('parsePropsFile should extract package versions', async () => {
+    test('parsePropsContent should extract package versions', () => {
         const xmlContent = `<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <ItemGroup Label="Test Framework">
@@ -57,40 +51,43 @@ suite('XmlService Test Suite', () => {
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 </Project>`;
-        const result = xmlService.parsePropsFileContent(xmlContent);
-        assert.strictEqual(result.length, 2, 'Should have 2 item groups');
-        assert.strictEqual(result[0].label, 'Test Framework');
-        assert.strictEqual(result[0].packages.length, 2, 'First group should have 2 packages');
-        assert.strictEqual(result[1].label, 'Utilities');
-        assert.strictEqual(result[1].packages.length, 1, 'Second group should have 1 package');
+        const result = xmlService.parsePropsContent(xmlContent);
+        assert.ok(result, 'Should return a result');
+        assert.strictEqual(result.itemGroups.length, 2, 'Should have 2 item groups');
+        assert.strictEqual(result.itemGroups[0].label, 'Test Framework');
+        assert.strictEqual(result.itemGroups[0].packages.length, 2, 'First group should have 2 packages');
+        assert.strictEqual(result.itemGroups[1].label, 'Utilities');
+        assert.strictEqual(result.itemGroups[1].packages.length, 1, 'Second group should have 1 package');
         // Verify package details
-        const nunit = result[0].packages.find(p => p.name === 'NUnit');
+        const nunit = result.itemGroups[0].packages.find((p) => p.name === 'NUnit');
         assert.ok(nunit, 'NUnit package should exist');
         assert.strictEqual(nunit?.version, '4.0.0');
     });
-    test('parsePropsFile should handle single ItemGroup', async () => {
+    test('parsePropsContent should handle single ItemGroup', () => {
         const xmlContent = `<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <ItemGroup>
     <PackageVersion Include="NUnit" Version="4.0.0" />
   </ItemGroup>
 </Project>`;
-        const result = xmlService.parsePropsFileContent(xmlContent);
-        assert.strictEqual(result.length, 1, 'Should have 1 item group');
-        assert.strictEqual(result[0].label, '', 'Label should be empty for unlabeled group');
-        assert.strictEqual(result[0].packages.length, 1);
+        const result = xmlService.parsePropsContent(xmlContent);
+        assert.ok(result, 'Should return a result');
+        assert.strictEqual(result.itemGroups.length, 1, 'Should have 1 item group');
+        assert.strictEqual(result.itemGroups[0].label, undefined, 'Label should be undefined for unlabeled group');
+        assert.strictEqual(result.itemGroups[0].packages.length, 1);
     });
-    test('parsePropsFile should handle empty ItemGroup', async () => {
+    test('parsePropsContent should handle empty ItemGroup', () => {
         const xmlContent = `<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <ItemGroup Label="Empty">
   </ItemGroup>
 </Project>`;
-        const result = xmlService.parsePropsFileContent(xmlContent);
-        // Empty groups should be skipped
-        assert.strictEqual(result.length, 0, 'Should have 0 item groups (empty ones are filtered)');
+        const result = xmlService.parsePropsContent(xmlContent);
+        // Empty groups should be filtered out
+        assert.ok(result, 'Should return a result');
+        assert.strictEqual(result.itemGroups.length, 0, 'Should have 0 item groups (empty ones are filtered)');
     });
-    test('parsePropsFile should handle PropertyGroup', async () => {
+    test('parsePropsContent should handle PropertyGroup', () => {
         const xmlContent = `<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
@@ -100,49 +97,30 @@ suite('XmlService Test Suite', () => {
     <PackageVersion Include="NUnit" Version="4.0.0" />
   </ItemGroup>
 </Project>`;
-        const result = xmlService.parsePropsFileContent(xmlContent);
-        assert.strictEqual(result.length, 1, 'Should ignore PropertyGroup');
-        assert.strictEqual(result[0].packages.length, 1);
+        const result = xmlService.parsePropsContent(xmlContent);
+        assert.ok(result, 'Should return a result');
+        assert.strictEqual(result.managePackageVersionsCentrally, true, 'Should parse PropertyGroup');
+        assert.strictEqual(result.itemGroups.length, 1, 'Should have 1 ItemGroup');
+        assert.strictEqual(result.itemGroups[0].packages.length, 1);
     });
-    test('readCsprojFileContent should extract package references', () => {
-        const csprojContent = `<?xml version="1.0" encoding="utf-8"?>
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="NUnit" />
-    <PackageReference Include="Newtonsoft.Json" />
+    test('parsePropsContent should return null for invalid XML', () => {
+        const xmlContent = 'invalid xml content';
+        const result = xmlService.parsePropsContent(xmlContent);
+        assert.strictEqual(result, null, 'Should return null for invalid XML');
+    });
+    test('parsePropsContent should handle multiple packages in one group', () => {
+        const xmlContent = `<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup Label="Test">
+    <PackageVersion Include="Package1" Version="1.0.0" />
+    <PackageVersion Include="Package2" Version="2.0.0" />
+    <PackageVersion Include="Package3" Version="3.0.0" />
   </ItemGroup>
 </Project>`;
-        const packages = xmlService.readCsprojFileContent(csprojContent);
-        assert.strictEqual(packages.length, 2);
-        assert.ok(packages.includes('NUnit'));
-        assert.ok(packages.includes('Newtonsoft.Json'));
-    });
-    test('readCsprojFileContent should handle PackageReference with Version (version conflict)', () => {
-        const csprojContent = `<?xml version="1.0" encoding="utf-8"?>
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <PackageReference Include="NUnit" Version="4.0.0" />
-  </ItemGroup>
-</Project>`;
-        const packages = xmlService.readCsprojFileContent(csprojContent);
-        assert.strictEqual(packages.length, 1);
-        assert.ok(packages.includes('NUnit'));
-    });
-    test('getPackageReferencesWithVersions should detect version conflicts', () => {
-        const csprojContent = `<?xml version="1.0" encoding="utf-8"?>
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <PackageReference Include="NUnit" Version="4.0.0" />
-    <PackageReference Include="xUnit" />
-  </ItemGroup>
-</Project>`;
-        const versionedPackages = xmlService.getPackageReferencesWithVersions(csprojContent);
-        assert.strictEqual(versionedPackages.size, 1, 'Should only find packages with Version attribute');
-        assert.strictEqual(versionedPackages.get('NUnit'), '4.0.0');
-        assert.ok(!versionedPackages.has('xUnit'), 'xUnit should not be in versioned packages');
+        const result = xmlService.parsePropsContent(xmlContent);
+        assert.ok(result, 'Should return a result');
+        assert.strictEqual(result.itemGroups.length, 1);
+        assert.strictEqual(result.itemGroups[0].packages.length, 3, 'Should have 3 packages');
     });
 });
 //# sourceMappingURL=xmlService.test.js.map

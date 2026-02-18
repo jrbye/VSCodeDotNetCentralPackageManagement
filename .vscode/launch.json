@@ -7,8 +7,7 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        // Update this path to point to your test workspace with Directory.Packages.props
-        "${workspaceFolder}/../test-workspace"
+        "${workspaceFolder}/../JenkinsRazorApi"
       ],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
       "preLaunchTask": "${defaultBuildTask}"

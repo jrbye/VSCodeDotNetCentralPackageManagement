@@ -82,9 +82,9 @@ suite('NuGetService Test Suite', () => {
     });
     test('isPackageOutdated should not flag latest version as outdated', async function () {
         this.timeout(10000);
-        // First get the actual latest version
-        const versions = await nugetService.getPackageVersions('Newtonsoft.Json');
-        const latestVersion = versions[versions.length - 1];
+        // First get the actual latest stable version (excluding prerelease)
+        const latestVersion = await nugetService.getLatestVersion('Newtonsoft.Json', false);
+        assert.ok(latestVersion, 'Should get latest version');
         const result = await nugetService.isPackageOutdated('Newtonsoft.Json', latestVersion);
         assert.strictEqual(result.isOutdated, false, 'Latest version should not be outdated');
         assert.strictEqual(result.latestVersion, latestVersion);

@@ -8,6 +8,7 @@ A comprehensive Visual Studio Code extension that provides full support for mana
 - Manage all package versions in a single `Directory.Packages.props` file
 - Automatic creation and management of `Directory.Build.props` for CPM enablement
 - Support for organizing packages into labeled categories (e.g., Test Framework, Database Providers)
+- Get visibility into package Vulnerabilities and potential Transitive Package Conflicts
 
 ### 🎯 Intuitive UI Panels
 
@@ -30,6 +31,29 @@ A comprehensive Visual Studio Code extension that provides full support for mana
 - Add packages to additional projects after initial installation
 - Smart installation that preserves existing installations
 - Category selection for organizing packages
+- Pre-install vulnerability check warns before installing packages with known security issues
+- "View Advisories" button opens security advisory URLs in your browser
+
+### 🔍 Dependency Analysis
+- **Transitive conflict detection** via `dotnet restore` (NU1608 warnings) and `dotnet list --include-transitive`
+- **Security vulnerability scanning** via `dotnet list --vulnerable`
+- CONFLICT and vulnerability badges on packages in the sidebar
+- Analysis runs automatically at startup and on-demand via the "Analyze" button
+- Full-screen analysis overlay with spinner during dependency analysis
+- Configurable via `dotnetCpm.enableAnalysis` setting
+
+### 🛡️ Security Vulnerability Badges
+- Per-version vulnerability badges in both the Package Manager and Add Package version lists
+- Vulnerability data sourced from the NuGet package registration API (GitHub Advisory Database)
+- Severity badges (Low, Moderate, High, Critical) with tooltip showing vulnerability count
+- Pre-install vulnerability warning dialog with option to view advisories or cancel
+
+### 🔀 Transitive Dependency Warnings
+- **Compatible / Conflict Risk** badges on each version in the version list
+- Constraint data extracted from `project.assets.json` dependency graph
+- Constraint banner showing which packages require which version
+- Supports both exact (`[2.14.1]`) and minimum (`>= 2.14.1`) version constraints
+- Badges update automatically when analysis completes
 
 ### 🔄 Real-time Features
 - Automatic detection of package updates
@@ -37,6 +61,7 @@ A comprehensive Visual Studio Code extension that provides full support for mana
 - Visual progress overlays for all operations (install, upgrade, downgrade, remove)
 - Alphabetically sorted project lists that maintain order during operations
 - Intelligent UI updates that prevent unnecessary re-renders
+- Automatic refresh of package info, versions, and analysis badges when data changes
 
 ### ✨ IntelliSense Support
 - Package name auto-completion in `Directory.Packages.props`
@@ -50,6 +75,8 @@ A comprehensive Visual Studio Code extension that provides full support for mana
 
 ### ⚙️ Configuration Options
 - `dotnetCpm.showPrereleaseVersions`: Toggle display of prerelease versions (alpha, beta, rc) in searches and version lists
+- `dotnetCpm.enableAnalysis`: Enable/disable dependency analysis for transitive conflicts and security vulnerabilities (default: `true`)
+- `dotnetCpm.dotnetPath`: Custom path to the dotnet executable (leave empty to use system PATH)
 
 ## Requirements
 
@@ -124,14 +151,18 @@ A comprehensive Visual Studio Code extension that provides full support for mana
 | `.NET CPM: Open Package Manager` | Open the main package management panel |
 | `.NET CPM: Add Package` | Search and add NuGet packages |
 | `.NET CPM: Check for Package Upgrades` | Check all packages for available updates |
+| `.NET CPM: Run Dependency Analysis` | Analyze transitive conflicts and security vulnerabilities |
 | `.NET CPM: Refresh` | Refresh package and project information |
 | `.NET CPM: Search NuGet Packages` | Open the package search panel |
+| `.NET CPM: Open Directory.Packages.props` | Open the central package versions file |
 
 ## Extension Settings
 
 This extension contributes the following settings:
 
 * `dotnetCpm.showPrereleaseVersions`: Show prerelease versions (alpha, beta, rc) in package searches and version lists (default: `false`)
+* `dotnetCpm.enableAnalysis`: Enable dependency analysis for transitive conflicts and security vulnerabilities (default: `true`)
+* `dotnetCpm.dotnetPath`: Custom path to the dotnet executable. Leave empty to use the system PATH (default: `""`)
 
 ## How It Works
 
@@ -228,29 +259,38 @@ npm test
 ```
 vscode-dotnet-cpm/
 ├── src/
-│   ├── extension.ts              # Extension entry point
-│   ├── cpmManager.ts             # Core CPM logic
-│   ├── nugetService.ts           # NuGet API integration
-│   ├── xmlService.ts             # XML file operations
-│   ├── completionProvider.ts    # IntelliSense support
-│   ├── diagnosticsProvider.ts   # Error detection
-│   ├── commands/                # Command implementations
+│   ├── extension.ts                # Extension entry point
+│   ├── cpmManager.ts               # Core CPM logic
+│   ├── nugetService.ts             # NuGet API integration & vulnerability DB
+│   ├── xmlService.ts               # XML file operations
+│   ├── dotnetCliService.ts         # dotnet CLI wrapper
+│   ├── packageAnalysisService.ts   # Dependency analysis & transitive constraints
+│   ├── completionProvider.ts       # IntelliSense support
+│   ├── diagnosticsProvider.ts      # Error detection
+│   ├── versionUtils.ts            # Semantic version comparison utilities
+│   ├── commands/                   # Command implementations
 │   │   ├── addPackage.ts
 │   │   ├── addPackagePanel.ts
 │   │   ├── updateVersion.ts
 │   │   └── removePackage.ts
-│   └── webview/                 # UI panels
+│   ├── treeView/                   # Tree data for commands
+│   │   ├── packageTreeItem.ts
+│   │   └── packageTreeProvider.ts
+│   └── webview/                    # UI panels
 │       ├── packageManagerPanel.ts
 │       └── packageManagerPanelHtml.ts
-├── test/                        # Unit tests
-├── package.json                 # Extension manifest
-└── tsconfig.json               # TypeScript configuration
+├── test/                           # Unit tests
+├── package.json                    # Extension manifest
+└── tsconfig.json                   # TypeScript configuration
 ```
 
 ## Known Issues
 
 - Large solution scans may take a few seconds on first load
 - NuGet API rate limiting may affect searches with very rapid typing
+- Initial dependency analysis runs against the entire solution; per-project incremental analysis is used for individual package changes
+- Vulnerability badges only appear on versions visible in the top 20 of the version list
+- The NuGet vulnerability database may not cover all packages; badges depend on data from the GitHub Advisory Database
 
 ## Contributing
 
@@ -264,7 +304,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-ISC
+MIT
 
 ## Acknowledgments
 
@@ -274,6 +314,22 @@ ISC
 - Uses [axios](https://github.com/axios/axios) for HTTP requests
 
 ## Changelog
+
+### 0.2.0 - Dependency Analysis & Security
+- Transitive dependency conflict detection via `dotnet restore` and `dotnet list`
+- Security vulnerability scanning via `dotnet list --vulnerable`
+- CONFLICT and vulnerability badges on packages in the sidebar
+- Per-version vulnerability badges sourced from NuGet registration API (GitHub Advisory Database)
+- Compatible / Conflict Risk badges on versions based on `project.assets.json` constraints
+- Transitive constraint banner showing dependency requirements
+- Pre-install vulnerability check with modal warning and "View Advisories" button
+- Full-screen analysis overlay with spinner during dependency analysis
+- Analysis runs automatically at startup and on-demand via the "Analyze" button
+- Auto-refresh of info pane, versions pane, and analysis badges when data changes
+- NuGet vulnerability database pre-loaded at startup for fast lookups
+- New command: Run Dependency Analysis
+- New command: Open Directory.Packages.props
+- New settings: `enableAnalysis`, `dotnetPath`
 
 ### 0.1.0 - Initial Release
 - Package management UI with categorized views

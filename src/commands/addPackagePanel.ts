@@ -133,10 +133,24 @@ export class AddPackagePanel {
                 versions = versions.filter(v => !v.includes('-'));
             }
 
+            const reversedVersions = versions.reverse();
+
+            // Fetch per-version vulnerability data from NuGet registration endpoint
+            const allVulns = await this.nugetService.getVersionVulnerabilities(packageName);
+            const versionVulnerabilities: Record<string, { severity: string; count: number }> = {};
+            for (const version of reversedVersions.slice(0, 20)) {
+                const vulns = allVulns[version.toLowerCase()];
+                if (vulns && vulns.length > 0) {
+                    const maxSeverity = this.getMaxVulnSeverity(vulns);
+                    versionVulnerabilities[version] = { severity: maxSeverity, count: vulns.length };
+                }
+            }
+
             this._panel.webview.postMessage({
                 type: 'versionsData',
                 packageName: packageName,
-                versions: versions.reverse()
+                versions: reversedVersions,
+                versionVulnerabilities: versionVulnerabilities
             });
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to fetch versions for ${packageName}`);
@@ -145,6 +159,35 @@ export class AddPackagePanel {
 
     private async _handleInstallPackage(packageName: string, version: string, category: string, projectPaths: string[]) {
         try {
+            // Check for known security vulnerabilities before installing
+            const vulns = await this.nugetService.checkVulnerabilities(packageName, version);
+            if (vulns.length > 0) {
+                const maxSeverity = this.getMaxVulnSeverity(vulns);
+                const vulnSummary = vulns.map(v => `  ${v.severity}: ${v.advisoryUrl}`).join('\n');
+                let choice: string | undefined;
+                do {
+                    choice = await vscode.window.showWarningMessage(
+                        `${packageName} ${version} has ${vulns.length} known security ` +
+                        `${vulns.length === 1 ? 'vulnerability' : 'vulnerabilities'} (${maxSeverity}).`,
+                        { modal: true, detail: vulnSummary },
+                        'Install Anyway',
+                        'View Advisories'
+                    );
+                    if (choice === 'View Advisories') {
+                        for (const v of vulns) {
+                            await vscode.env.openExternal(vscode.Uri.parse(v.advisoryUrl));
+                        }
+                    }
+                } while (choice === 'View Advisories');
+                if (choice !== 'Install Anyway') {
+                    this._panel.webview.postMessage({
+                        type: 'installComplete',
+                        success: false
+                    });
+                    return;
+                }
+            }
+
             // Notify webview that installation is in progress
             this._panel.webview.postMessage({
                 type: 'installInProgress',
@@ -229,6 +272,16 @@ export class AddPackagePanel {
             });
             vscode.window.showErrorMessage(`Failed to remove package: ${error}`);
         }
+    }
+
+    private getMaxVulnSeverity(vulns: Array<{ severity: string }>): string {
+        const levels = ['Low', 'Moderate', 'High', 'Critical'];
+        let max = 0;
+        for (const v of vulns) {
+            const idx = levels.indexOf(v.severity);
+            if (idx > max) { max = idx; }
+        }
+        return levels[max];
     }
 
     public dispose() {
@@ -568,6 +621,15 @@ export class AddPackagePanel {
             background-color: var(--vscode-badge-background);
             color: var(--vscode-badge-foreground);
         }
+        .version-vulnerable {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            background-color: var(--vscode-editorError-foreground, #f44747);
+            color: var(--vscode-editor-background);
+            font-weight: 600;
+            cursor: help;
+        }
 
         .btn {
             padding: 6px 16px;
@@ -720,7 +782,7 @@ export class AddPackagePanel {
                     renderPackageDetails(message.packageName, message.info);
                     break;
                 case 'versionsData':
-                    renderVersions(message.packageName, message.versions);
+                    renderVersions(message.packageName, message.versions, message.versionVulnerabilities || {});
                     break;
                 case 'installInProgress':
                     showInstallInProgress(message.packageName, message.version);
@@ -883,7 +945,7 @@ export class AddPackagePanel {
             \`;
         }
 
-        function renderVersions(packageName, versions) {
+        function renderVersions(packageName, versions, vulns) {
             const versionsPanel = document.getElementById('versionsPanel');
             const latestVersion = versions[0];
             const stableVersions = versions.filter(v => !v.includes('-'));
@@ -928,16 +990,22 @@ export class AddPackagePanel {
                 </div>
                 <div class="versions-content">
                     <div class="versions-list">
-                        \${versions.slice(0, 20).map(version => \`
+                        \${versions.slice(0, 20).map(version => {
+                            const vulnInfo = vulns[version];
+                            const vulnHtml = vulnInfo
+                                ? \`<span class="version-vulnerable" title="\${vulnInfo.count} known \${vulnInfo.count === 1 ? 'vulnerability' : 'vulnerabilities'}">\${vulnInfo.severity}</span>\`
+                                : '';
+                            return \`
                             <div class="version-item \${version === latestVersion ? 'latest' : ''}">
                                 <div class="version-info">
                                     <span class="version-number">\${version}</span>
                                     \${version === latestVersion ? '<span class="version-label">Latest</span>' : ''}
                                     \${version === latestStable && version !== latestVersion ? '<span class="version-label">Latest Stable</span>' : ''}
+                                    \${vulnHtml}
                                 </div>
                                 <button class="btn" onclick="installPackage('\${packageName}', '\${version}')">\${isInstalled ? 'Add to Projects' : 'Install'}</button>
                             </div>
-                        \`).join('')}
+                        \`;}).join('')}
                     </div>
                 </div>
             \`;

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { XmlService, Package, ItemGroup } from './xmlService';
 import { NuGetService } from './nugetService';
+import { compareVersions } from './versionUtils';
 
 export interface PackageUsage {
     package: Package;
@@ -15,6 +16,11 @@ export interface ProjectInfo {
     versionedPackages: Map<string, string>;
 }
 
+export interface ChangeHint {
+    packageName?: string;
+    projectPaths?: string[];
+}
+
 export class CpmManager {
     private xmlService: XmlService;
     private nugetService: NuGetService;
@@ -22,7 +28,7 @@ export class CpmManager {
     private itemGroups: ItemGroup[] = [];
     private projects: ProjectInfo[] = [];
     private fileWatcher: vscode.FileSystemWatcher | null = null;
-    private onDidChangeEmitter = new vscode.EventEmitter<void>();
+    private onDidChangeEmitter = new vscode.EventEmitter<ChangeHint | undefined>();
     public readonly onDidChange = this.onDidChangeEmitter.event;
 
     constructor(xmlService: XmlService, nugetService: NuGetService) {
@@ -40,6 +46,7 @@ export class CpmManager {
                 await this.loadPackages();
                 await this.scanProjects();
                 this.setupFileWatcher();
+                this.onDidChangeEmitter.fire(undefined);
                 console.log('CPM Manager initialization complete');
                 return true;
             }
@@ -85,27 +92,31 @@ export class CpmManager {
             const csprojFiles = await vscode.workspace.findFiles('**/*.csproj', '**/node_modules/**');
             console.log(`Found ${csprojFiles.length} .csproj files`);
 
-            this.projects = [];
+            const results = await Promise.all(
+                csprojFiles.map(async (csprojUri) => {
+                    try {
+                        const [packages, versionedPackages] = await Promise.all([
+                            this.xmlService.readCsprojFile(csprojUri),
+                            this.xmlService.getPackageReferencesWithVersions(csprojUri)
+                        ]);
 
-            for (const csprojUri of csprojFiles) {
-                try {
-                    const packages = await this.xmlService.readCsprojFile(csprojUri);
-                    const versionedPackages = await this.xmlService.getPackageReferencesWithVersions(csprojUri);
-
-                    if (packages) {
-                        this.projects.push({
-                            path: csprojUri.fsPath,
-                            name: path.basename(csprojUri.fsPath, '.csproj'),
-                            packages: packages,
-                            versionedPackages: versionedPackages || new Map()
-                        });
+                        if (packages) {
+                            return {
+                                path: csprojUri.fsPath,
+                                name: path.basename(csprojUri.fsPath, '.csproj'),
+                                packages: packages,
+                                versionedPackages: versionedPackages || new Map()
+                            } as ProjectInfo;
+                        }
+                        return null;
+                    } catch (error) {
+                        console.error(`Error reading project file ${csprojUri.fsPath}:`, error);
+                        return null;
                     }
-                } catch (error) {
-                    console.error(`Error reading project file ${csprojUri.fsPath}:`, error);
-                    // Continue with other projects
-                }
-            }
+                })
+            );
 
+            this.projects = results.filter((p): p is ProjectInfo => p !== null);
             console.log(`Successfully loaded ${this.projects.length} projects`);
         } catch (error) {
             console.error('Error scanning projects:', error);
@@ -136,10 +147,9 @@ export class CpmManager {
         });
     }
 
-    async refresh(): Promise<void> {
-        await this.loadPackages();
-        await this.scanProjects();
-        this.onDidChangeEmitter.fire();
+    async refresh(hint?: ChangeHint): Promise<void> {
+        await Promise.all([this.loadPackages(), this.scanProjects()]);
+        this.onDidChangeEmitter.fire(hint);
     }
 
     getItemGroups(): ItemGroup[] {
@@ -226,10 +236,11 @@ export class CpmManager {
         // Sort packages alphabetically within the group
         targetGroup.packages.sort((a, b) => a.name.localeCompare(b.name));
 
+
         const success = await this.xmlService.writePropsFile(this.propsFileUri, this.itemGroups);
 
         if (success) {
-            await this.refresh();
+            await this.refresh({ packageName });
             vscode.window.showInformationMessage(`Added package ${packageName} @ ${version}`);
         }
 
@@ -258,17 +269,21 @@ export class CpmManager {
             return false;
         }
 
+
         const success = await this.xmlService.writePropsFile(this.propsFileUri, this.itemGroups);
 
         if (success) {
-            await this.refresh();
+            const affectedPaths = this.projects
+                .filter(p => p.packages.includes(packageName))
+                .map(p => p.path);
+            await this.refresh({ packageName, projectPaths: affectedPaths });
             const usedIn = this.getPackageUsage(packageName);
             const projectsText = usedIn.length > 0
                 ? ` (used in ${usedIn.length} project${usedIn.length > 1 ? 's' : ''})`
                 : '';
 
             // Determine if it's an upgrade or downgrade
-            const isDowngrade = this.compareVersions(oldVersion, newVersion) > 0;
+            const isDowngrade = compareVersions(oldVersion, newVersion) > 0;
             const action = isDowngrade ? 'Downgraded' : 'Upgraded';
 
             vscode.window.showInformationMessage(
@@ -279,19 +294,7 @@ export class CpmManager {
         return success;
     }
 
-    private compareVersions(v1: string, v2: string): number {
-        const parts1 = v1.split(/[.-]/).map(p => parseInt(p) || 0);
-        const parts2 = v2.split(/[.-]/).map(p => parseInt(p) || 0);
-        const maxLength = Math.max(parts1.length, parts2.length);
 
-        for (let i = 0; i < maxLength; i++) {
-            const p1 = parts1[i] || 0;
-            const p2 = parts2[i] || 0;
-            if (p1 < p2) return -1;
-            if (p1 > p2) return 1;
-        }
-        return 0;
-    }
 
     async removePackage(packageName: string): Promise<boolean> {
         if (!this.propsFileUri) {
@@ -316,6 +319,7 @@ export class CpmManager {
             }
 
             // Remove PackageReference from all projects that use it
+    
             for (const project of projectsUsingPackage) {
                 const projectUri = vscode.Uri.file(project.path);
                 await this.xmlService.removePackageReferenceFromProject(projectUri, packageName);
@@ -351,10 +355,12 @@ export class CpmManager {
         // Remove empty groups
         this.itemGroups = this.itemGroups.filter(g => g.packages.length > 0);
 
+
         const success = await this.xmlService.writePropsFile(this.propsFileUri, this.itemGroups);
 
         if (success) {
-            await this.refresh();
+            const affectedPaths = projectsUsingPackage.map(p => p.path);
+            await this.refresh({ packageName, projectPaths: affectedPaths });
             vscode.window.showInformationMessage(`Removed package ${packageName}`);
         }
 
@@ -381,11 +387,12 @@ export class CpmManager {
             await this.xmlService.ensureDirectoryBuildProps(workspaceRoot);
         }
 
+
         const projectUri = vscode.Uri.file(projectPath);
         const success = await this.xmlService.addPackageReferenceToProject(projectUri, packageName);
 
         if (success) {
-            await this.refresh();
+            await this.refresh({ packageName, projectPaths: [projectPath] });
             const projectName = path.basename(projectPath, '.csproj');
             vscode.window.showInformationMessage(`Added ${packageName} to ${projectName}`);
         }
@@ -394,16 +401,33 @@ export class CpmManager {
     }
 
     async removePackageFromProject(packageName: string, projectPath: string): Promise<boolean> {
+
         const projectUri = vscode.Uri.file(projectPath);
         const success = await this.xmlService.removePackageReferenceFromProject(projectUri, packageName);
 
         if (success) {
-            await this.refresh();
+            await this.refresh({ packageName, projectPaths: [projectPath] });
             const projectName = path.basename(projectPath, '.csproj');
             vscode.window.showInformationMessage(`Removed ${packageName} from ${projectName}`);
         }
 
         return success;
+    }
+
+    getWorkspaceRoot(): string | null {
+        if (this.propsFileUri) {
+            return path.dirname(this.propsFileUri.fsPath);
+        }
+        return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || null;
+    }
+
+    async getSolutionPath(): Promise<string | null> {
+        const root = this.getWorkspaceRoot();
+        if (!root) {
+            return null;
+        }
+        const slnFiles = await vscode.workspace.findFiles('*.sln', '**/node_modules/**', 1);
+        return slnFiles.length > 0 ? slnFiles[0].fsPath : null;
     }
 
     dispose(): void {

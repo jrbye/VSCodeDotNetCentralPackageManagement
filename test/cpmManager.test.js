@@ -55,14 +55,14 @@ suite('CpmManager Test Suite', () => {
             {
                 label: 'Test Framework',
                 packages: [
-                    { name: 'xUnit', version: '2.4.2' },
-                    { name: 'NUnit', version: '4.0.0' }
+                    { name: 'xUnit', version: '2.4.2', label: 'Test Framework' },
+                    { name: 'NUnit', version: '4.0.0', label: 'Test Framework' }
                 ]
             },
             {
                 label: 'Utilities',
                 packages: [
-                    { name: 'Newtonsoft.Json', version: '13.0.3' }
+                    { name: 'Newtonsoft.Json', version: '13.0.3', label: 'Utilities' }
                 ]
             }
         ];

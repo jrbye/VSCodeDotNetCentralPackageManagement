@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { compareVersions } from './versionUtils';
 
 export interface NuGetSearchResult {
     id: string;
@@ -16,12 +17,25 @@ export interface NuGetPackageVersion {
     published: string;
 }
 
+export interface VulnerabilityEntry {
+    severity: number;   // 0=Low, 1=Moderate, 2=High, 3=Critical
+    url: string;
+    versions: string;   // NuGet version range
+}
+
+export interface VulnerabilityInfo {
+    severity: string;
+    advisoryUrl: string;
+    affectedVersions: string;
+}
+
 export class NuGetService {
     private axiosInstance: AxiosInstance;
     private searchBaseUrl = 'https://azuresearch-usnc.nuget.org';
     private apiBaseUrl = 'https://api.nuget.org';
     private cache: Map<string, { data: any; timestamp: number }>;
     private cacheTimeout = 5 * 60 * 1000; // 5 minutes
+    private cacheMaxSize = 200;
 
     constructor() {
         this.axiosInstance = axios.create({
@@ -42,6 +56,20 @@ export class NuGetService {
     }
 
     private setCachedData(key: string, data: any): void {
+        // Evict oldest entries when cache exceeds max size
+        if (this.cache.size >= this.cacheMaxSize) {
+            let oldestKey: string | null = null;
+            let oldestTime = Infinity;
+            for (const [k, v] of this.cache) {
+                if (v.timestamp < oldestTime) {
+                    oldestTime = v.timestamp;
+                    oldestKey = k;
+                }
+            }
+            if (oldestKey) {
+                this.cache.delete(oldestKey);
+            }
+        }
         this.cache.set(key, { data, timestamp: Date.now() });
     }
 
@@ -194,8 +222,8 @@ export class NuGetService {
                 for (const page of metadata.items) {
                     const lowerVersion = page.lower || '';
                     const upperVersion = page.upper || '';
-                    if (this.compareVersions(version, upperVersion) <= 0 &&
-                        this.compareVersions(version, lowerVersion) >= 0) {
+                    if (compareVersions(version, upperVersion) <= 0 &&
+                        compareVersions(version, lowerVersion) >= 0) {
                         catalogPage = page;
                         break;
                     }
@@ -243,6 +271,178 @@ export class NuGetService {
         }
     }
 
+    async getVersionVulnerabilities(packageId: string): Promise<Record<string, Array<{ severity: string; advisoryUrl: string }>>> {
+        if (!packageId) {
+            return {};
+        }
+
+        const cacheKey = `version-vulns:${packageId.toLowerCase()}`;
+        const cached = this.getCachedData<Record<string, Array<{ severity: string; advisoryUrl: string }>>>(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        try {
+            const url = `${this.apiBaseUrl}/v3/registration5-gz-semver2/${packageId.toLowerCase()}/index.json`;
+            const response = await this.axiosInstance.get(url);
+            const result: Record<string, Array<{ severity: string; advisoryUrl: string }>> = {};
+
+            for (const page of response.data.items || []) {
+                let items = page.items || [];
+
+                // If items not expanded inline, fetch the page
+                if (items.length === 0 && page['@id']) {
+                    try {
+                        const pageResponse = await this.axiosInstance.get(page['@id']);
+                        items = pageResponse.data.items || [];
+                    } catch {
+                        continue;
+                    }
+                }
+
+                for (const item of items) {
+                    const entry = item.catalogEntry;
+                    if (entry?.vulnerabilities && entry.vulnerabilities.length > 0) {
+                        // Store with lowercase key to match flat container version strings
+                        result[entry.version.toLowerCase()] = entry.vulnerabilities.map((v: any) => ({
+                            severity: this.severityToString(parseInt(v.severity) || 0),
+                            advisoryUrl: v.advisoryUrl || ''
+                        }));
+                    }
+                }
+            }
+
+            this.setCachedData(cacheKey, result);
+            return result;
+        } catch (error) {
+            console.error('Error getting version vulnerabilities:', error);
+            return {};
+        }
+    }
+
+    // --- Vulnerability Database ---
+
+    private vulnDb: Map<string, VulnerabilityEntry[]> | null = null;
+    private vulnDbTimestamp: number = 0;
+    private vulnDbTtl = 30 * 60 * 1000; // 30 minutes
+    private vulnDbLoading: Promise<void> | null = null;
+
+    async ensureVulnerabilityDb(): Promise<void> {
+        if (this.vulnDb && Date.now() - this.vulnDbTimestamp < this.vulnDbTtl) {
+            return;
+        }
+        if (this.vulnDbLoading) {
+            return this.vulnDbLoading;
+        }
+        this.vulnDbLoading = this.loadVulnerabilityDb();
+        try {
+            await this.vulnDbLoading;
+        } finally {
+            this.vulnDbLoading = null;
+        }
+    }
+
+    private async loadVulnerabilityDb(): Promise<void> {
+        try {
+            const indexUrl = 'https://api.nuget.org/v3/vulnerabilities/index.json';
+            const indexResponse = await this.axiosInstance.get(indexUrl);
+            const pages: Array<{ '@id': string }> = indexResponse.data;
+
+            const db = new Map<string, VulnerabilityEntry[]>();
+
+            for (const page of pages) {
+                const pageResponse = await this.axiosInstance.get(page['@id']);
+                const pageData: Record<string, VulnerabilityEntry[]> = pageResponse.data;
+
+                for (const [packageId, entries] of Object.entries(pageData)) {
+                    const key = packageId.toLowerCase();
+                    const existing = db.get(key) || [];
+                    existing.push(...entries);
+                    db.set(key, existing);
+                }
+            }
+
+            this.vulnDb = db;
+            this.vulnDbTimestamp = Date.now();
+            console.log(`Loaded vulnerability database: ${db.size} packages with known vulnerabilities`);
+        } catch (error) {
+            console.warn('Failed to load NuGet vulnerability database:', error);
+            // Don't overwrite existing db on failure
+            if (!this.vulnDb) {
+                this.vulnDb = new Map();
+                this.vulnDbTimestamp = Date.now();
+            }
+        }
+    }
+
+    async checkVulnerabilities(packageId: string, version: string): Promise<VulnerabilityInfo[]> {
+        await this.ensureVulnerabilityDb();
+        if (!this.vulnDb) {
+            return [];
+        }
+
+        const entries = this.vulnDb.get(packageId.toLowerCase()) || [];
+        const matches: VulnerabilityInfo[] = [];
+
+        for (const entry of entries) {
+            if (this.versionInRange(version, entry.versions)) {
+                matches.push({
+                    severity: this.severityToString(entry.severity),
+                    advisoryUrl: entry.url,
+                    affectedVersions: entry.versions
+                });
+            }
+        }
+
+        return matches;
+    }
+
+    private severityToString(severity: number): string {
+        switch (severity) {
+            case 0: return 'Low';
+            case 1: return 'Moderate';
+            case 2: return 'High';
+            case 3: return 'Critical';
+            default: return 'Unknown';
+        }
+    }
+
+    private versionInRange(version: string, range: string): boolean {
+        // NuGet version range syntax:
+        // "(, 2.0.0)"  → < 2.0.0
+        // "[1.0.0, 2.0.0)" → >= 1.0.0 and < 2.0.0
+        // "[1.0.0, 2.0.0]" → >= 1.0.0 and <= 2.0.0
+        // "(1.0.0, )" → > 1.0.0
+        const trimmed = range.trim();
+        const match = trimmed.match(/^([[(])\s*([^,]*?)\s*,\s*([^)\]]*?)\s*([\])])$/);
+        if (!match) {
+            return false;
+        }
+
+        const lowerInclusive = match[1] === '[';
+        const lowerStr = match[2].trim();
+        const upperStr = match[3].trim();
+        const upperInclusive = match[4] === ']';
+
+        // Check lower bound
+        if (lowerStr) {
+            const cmp = compareVersions(version, lowerStr);
+            if (lowerInclusive ? cmp < 0 : cmp <= 0) {
+                return false;
+            }
+        }
+
+        // Check upper bound
+        if (upperStr) {
+            const cmp = compareVersions(version, upperStr);
+            if (upperInclusive ? cmp > 0 : cmp >= 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     clearCache(): void {
         this.cache.clear();
     }
@@ -258,30 +458,9 @@ export class NuGetService {
         }
 
         const isOutdated = currentVersion !== latestVersion &&
-                          this.compareVersions(currentVersion, latestVersion) < 0;
+                          compareVersions(currentVersion, latestVersion) < 0;
 
         return { isOutdated, latestVersion };
     }
 
-    private compareVersions(v1: string, v2: string): number {
-        // Simple version comparison (doesn't handle all semver cases, but good enough)
-        const parts1 = v1.split(/[.-]/).map(p => parseInt(p) || 0);
-        const parts2 = v2.split(/[.-]/).map(p => parseInt(p) || 0);
-
-        const maxLength = Math.max(parts1.length, parts2.length);
-
-        for (let i = 0; i < maxLength; i++) {
-            const p1 = parts1[i] || 0;
-            const p2 = parts2[i] || 0;
-
-            if (p1 < p2) {
-                return -1;
-            }
-            if (p1 > p2) {
-                return 1;
-            }
-        }
-
-        return 0;
-    }
 }

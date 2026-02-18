@@ -4,6 +4,8 @@ import { NuGetService } from './nugetService';
 import { CpmManager } from './cpmManager';
 import { CompletionProvider } from './completionProvider';
 import { DiagnosticsProvider } from './diagnosticsProvider';
+import { DotnetCliService } from './dotnetCliService';
+import { PackageAnalysisService } from './packageAnalysisService';
 import { addPackageCommand } from './commands/addPackage';
 import { updateVersionCommand } from './commands/updateVersion';
 import { removePackageCommand } from './commands/removePackage';
@@ -11,13 +13,15 @@ import { PackageManagerPanel } from './webview/packageManagerPanel';
 import { AddPackagePanel } from './commands/addPackagePanel';
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('=== .NET CPM v0.1.1 Activation Started ===');
+    console.log('=== .NET CPM v0.2.0 Activation Started ===');
     console.log('.NET Central Package Management extension is now active');
 
     // Initialize services
     const xmlService = new XmlService();
     const nugetService = new NuGetService();
     const cpmManager = new CpmManager(xmlService, nugetService);
+    const dotnetCliService = new DotnetCliService();
+    const analysisService = new PackageAnalysisService(dotnetCliService, cpmManager);
 
     // Register completion provider for Directory.Packages.props
     const completionProvider = new CompletionProvider(nugetService, cpmManager);
@@ -28,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Register diagnostics provider
-    const diagnosticsProvider = new DiagnosticsProvider(cpmManager, xmlService);
+    const diagnosticsProvider = new DiagnosticsProvider(cpmManager, xmlService, analysisService);
 
     // Initialize CPM Manager in background (don't block activation)
     cpmManager.initialize().then(initialized => {
@@ -38,6 +42,26 @@ export function activate(context: vscode.ExtensionContext) {
             diagnosticsProvider.updateDiagnostics().catch(err => {
                 console.error('Error updating diagnostics:', err);
             });
+
+            // Run initial dependency analysis in background
+            const analysisEnabled = vscode.workspace.getConfiguration('dotnetCpm').get<boolean>('enableAnalysis', true);
+            if (analysisEnabled) {
+                console.log('[Analysis] Starting initial analysis on startup');
+                analysisService.runFullAnalysis().then(() => {
+                    console.log('[Analysis] Initial startup analysis complete');
+                }).catch(err => {
+                    console.error('Error running initial package analysis:', err);
+                });
+            }
+
+            // Pre-load the NuGet vulnerability database in background
+            nugetService.ensureVulnerabilityDb().catch(err => {
+                console.warn('Failed to pre-load vulnerability database:', err);
+            });
+
+            // Always auto-open the Package Manager panel after successful initialization
+            hasAutoOpened = true;
+            PackageManagerPanel.createOrShow(context.extensionUri, cpmManager, nugetService, analysisService);
         } else {
             console.log('No Directory.Packages.props found in workspace');
         }
@@ -45,6 +69,9 @@ export function activate(context: vscode.ExtensionContext) {
         console.error('Error initializing CPM Manager:', error);
         vscode.window.showErrorMessage(`Failed to initialize .NET CPM: ${error.message}`);
     });
+
+    // No auto-analysis after changes. Analysis runs once at startup and
+    // on-demand via the "Run Analysis" button/command.
 
     // Note: Tree view removed - using Activity Bar with direct panel access instead
 
@@ -64,7 +91,7 @@ export function activate(context: vscode.ExtensionContext) {
             // Slight delay to ensure the view is fully shown
             setTimeout(() => {
                 if (cpmManager.hasPropsFile()) {
-                    PackageManagerPanel.createOrShow(context.extensionUri, cpmManager, nugetService);
+                    PackageManagerPanel.createOrShow(context.extensionUri, cpmManager, nugetService, analysisService);
                 }
             }, 100);
         }
@@ -156,6 +183,35 @@ export function activate(context: vscode.ExtensionContext) {
         );
     });
 
+    // Run Analysis command
+    const runAnalysisCmd = vscode.commands.registerCommand('dotnetCpm.runAnalysis', async () => {
+        if (!cpmManager.hasPropsFile()) {
+            vscode.window.showWarningMessage('No Directory.Packages.props found in workspace');
+            return;
+        }
+
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Analyzing dependencies...',
+                cancellable: false
+            },
+            async () => {
+                const result = await analysisService.runFullAnalysis(true);
+                const totalIssues = result.transitiveConflicts.length + result.vulnerablePackages.length;
+                if (result.error) {
+                    vscode.window.showWarningMessage(`Analysis completed with errors: ${result.error}`);
+                } else if (totalIssues > 0) {
+                    vscode.window.showWarningMessage(
+                        `Found ${result.transitiveConflicts.length} transitive conflict(s) and ${result.vulnerablePackages.length} vulnerable package(s).`
+                    );
+                } else {
+                    vscode.window.showInformationMessage('No dependency issues found.');
+                }
+            }
+        );
+    });
+
     // Open Directory.Packages.props command
     const openPropsFileCmd = vscode.commands.registerCommand('dotnetCpm.openPropsFile', async () => {
         const propsUri = cpmManager.getPropsFileUri();
@@ -173,7 +229,7 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showWarningMessage('No Directory.Packages.props found in workspace');
             return;
         }
-        PackageManagerPanel.createOrShow(context.extensionUri, cpmManager, nugetService);
+        PackageManagerPanel.createOrShow(context.extensionUri, cpmManager, nugetService, analysisService);
     });
 
     // Add all disposables to context
@@ -186,14 +242,17 @@ export function activate(context: vscode.ExtensionContext) {
         removePackageCmd,
         searchPackagesCmd,
         checkForUpdatesCmd,
+        runAnalysisCmd,
         openPropsFileCmd,
         openPackageManagerCmd,
         cpmManager,
-        diagnosticsProvider
+        diagnosticsProvider,
+        dotnetCliService,
+        analysisService
     );
 
     // Update diagnostics will happen after initialization completes
-    console.log('=== .NET CPM v0.1.1 Activation Complete ===');
+    console.log('=== .NET CPM v0.2.0 Activation Complete ===');
 }
 
 export function deactivate() {
