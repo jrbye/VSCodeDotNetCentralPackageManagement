@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-02-18
+
+### Added
+- **Security vulnerability badges**: Packages with known vulnerabilities now display severity badges (Critical, High, Moderate, Low) with clickable advisory links
+- **Transitive conflict badges**: Visual indicators when transitive dependency versions conflict with centrally managed versions
+- **Dependency analysis service**: New `PackageAnalysisService` that runs `dotnet list package` to detect transitive conflicts and security vulnerabilities
+- **dotnet CLI integration**: New `DotnetCliService` for structured interaction with the dotnet CLI (JSON output parsing, restore warning detection)
+- **Informational popups**: Clicking vulnerability or conflict badges shows detailed information about the issue
+- **Analysis configuration**: New `dotnetCpm.enableAnalysis` setting to enable/disable dependency analysis
+- **Analyze Dependencies command**: New `.NET CPM: Analyze Dependencies` command to manually trigger analysis
+
+### Improved
+- Enhanced Package Manager UI with vulnerability and conflict indicators
+- Expanded NuGet service with vulnerability data support
+- Better diagnostics provider with security and conflict warnings
+- Improved Add Package panel with richer package metadata
+
 ## [0.1.2] - 2025-01-15
 
 ### Fixed
